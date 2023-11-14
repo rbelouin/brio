@@ -57,6 +57,16 @@ concatCircuits (Circuit _ (CircuitEdge Outie _ _ _)) (Circuit Outie _) = Left "C
 concatCircuits (Circuit b (CircuitEdge _ x y α)) (Circuit _ (CircuitEdge t x' y' β)) = Right $ Circuit b $ CircuitEdge t (x + x'') (y + y'') (α + β)
   where (x'', y'') = rotate x' y' α
 
+isClosed :: Circuit -> Bool
+isClosed (Circuit End _) = False
+isClosed (Circuit _ (CircuitEdge End _ _ _)) = False
+isClosed (Circuit Innie (CircuitEdge Innie _ _ _)) = False
+isClosed (Circuit Outie (CircuitEdge Outie _ _ _)) = False
+isClosed (Circuit _ (CircuitEdge _ x y α)) = x < 0.1 && x > -0.1 && y < 0.1 && y > -0.1 && (β < 0.1 || β > 2*pi - 0.1)
+  where
+    β = modPi α
+    modPi a = if a < 0 then modPi (a + 2*pi) else if (a >= 2*pi) then modPi (a - 2*pi) else a
+
 xsEndTrack :: Piece
 xsEndTrack = Piece Innie $ Edge End $ Straight (2.0 / 3.0)
 
@@ -76,4 +86,4 @@ lgRoundedTrack :: Piece
 lgRoundedTrack = Piece Innie $ Edge Outie $ Arc (11.0 / 3.0) (pi * 2 / 8) 
 
 main :: IO ()
-main = putStrLn $ show $ foldM concatCircuits (fromPiece lgRoundedTrack) $ fromPiece <$> (replicate 7 lgRoundedTrack)
+main = putStrLn $ show $ fmap isClosed $ foldM concatCircuits (fromPiece lgRoundedTrack) $ fromPiece <$> (replicate 7 lgRoundedTrack)
