@@ -1,6 +1,6 @@
 module Main where
 
-import Control.Monad (foldM)
+import Data.List (nub)
 
 data EdgeType = End | Innie | Outie deriving (Show, Eq, Ord)
 data EdgeShape = Straight { length :: Float }
@@ -67,6 +67,17 @@ isClosed (Circuit _ (CircuitEdge _ x y α)) = x < 0.1 && x > -0.1 && y < 0.1 && 
     β = modPi α
     modPi a = if a < 0 then modPi (a + 2*pi) else if (a >= 2*pi) then modPi (a - 2*pi) else a
 
+flipPiece :: Piece -> [Piece]
+flipPiece p@(Piece _ (Edge _ (Straight _))) = [p]
+flipPiece p@(Piece b (Edge t (Arc r α))) = [p, Piece b (Edge t (Arc r (-α)))]
+
+rotatePiece :: Piece -> [Piece]
+rotatePiece p@(Piece b (Edge t (Straight l))) = [p, Piece t (Edge b (Straight l))]
+rotatePiece p@(Piece b (Edge t (Arc r α))) = [p, Piece t (Edge b (Arc r (-α)))]
+
+permutePiece :: Piece -> [Piece]
+permutePiece p = nub $ flipPiece p >>= rotatePiece
+
 xsEndTrack :: Piece
 xsEndTrack = Piece Innie $ Edge End $ Straight (2.0 / 3.0)
 
@@ -86,4 +97,4 @@ lgRoundedTrack :: Piece
 lgRoundedTrack = Piece Innie $ Edge Outie $ Arc (11.0 / 3.0) (pi * 2 / 8) 
 
 main :: IO ()
-main = putStrLn $ show $ fmap isClosed $ foldM concatCircuits (fromPiece lgRoundedTrack) $ fromPiece <$> (replicate 7 lgRoundedTrack)
+main = sequence_ $ putStrLn <$> show <$> permutePiece lgRoundedTrack
