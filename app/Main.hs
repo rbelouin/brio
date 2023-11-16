@@ -1,6 +1,12 @@
 module Main where
 
+import Control.Monad (mfilter)
+import Control.Monad.Extra (fold1M)
+import Data.Either.Extra (eitherToMaybe)
 import Data.List (nub)
+import Data.Map.Strict (fromList)
+import Data.Maybe (isJust)
+import qualified Inventory
 
 data EdgeType = End | Innie | Outie deriving (Show, Eq, Ord)
 data EdgeShape = Straight { length :: Float }
@@ -94,7 +100,16 @@ xlStraightTrack :: Piece
 xlStraightTrack = Piece Innie $ Edge Outie $ Straight (4.0)
 
 lgRoundedTrack :: Piece
-lgRoundedTrack = Piece Innie $ Edge Outie $ Arc (11.0 / 3.0) (pi * 2 / 8) 
+lgRoundedTrack = Piece Innie $ Edge Outie $ Arc (11.0 / 3.0) (pi * 2 / 8)
+
+inventory :: Inventory.Inventory Piece Int
+inventory = fromList
+  [ (lgRoundedTrack, 8)
+  , (smStraightTrack, 4)
+  ]
+
+isClosed' :: [Piece] -> Bool
+isClosed' ps = isJust $ mfilter isClosed $ eitherToMaybe $ fold1M concatCircuits $ fromPiece <$> ps
 
 main :: IO ()
-main = sequence_ $ putStrLn <$> show <$> permutePiece lgRoundedTrack
+main = sequence_ $ fmap putStrLn $ fmap show $ (!! 42) $ filter isClosed' $ Inventory.permutations permutePiece inventory
