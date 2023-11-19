@@ -2,11 +2,11 @@ module Main where
 
 import Control.Monad (mfilter)
 import Control.Monad.Extra (fold1M)
+import Data.Either (isRight)
 import Data.Either.Extra (eitherToMaybe)
 import Data.List (nub)
-import Data.Map.Strict (fromList)
 import Data.Maybe (isJust)
-import qualified Inventory
+import Inventory
 
 data EdgeType = End | Innie | Outie deriving (Show, Eq, Ord)
 data EdgeShape = Straight { length :: Float }
@@ -63,6 +63,9 @@ concatCircuits (Circuit _ (CircuitEdge Outie _ _ _)) (Circuit Outie _) = Left "C
 concatCircuits (Circuit b (CircuitEdge _ x y α)) (Circuit _ (CircuitEdge t x' y' β)) = Right $ Circuit b $ CircuitEdge t (x + x'') (y + y'') (α + β)
   where (x'', y'') = rotate x' y' α
 
+matchingPieces :: Piece -> Piece -> Bool
+matchingPieces p p' = isRight $ concatCircuits (fromPiece p) (fromPiece p')
+
 isClosed :: Circuit -> Bool
 isClosed (Circuit End _) = False
 isClosed (Circuit _ (CircuitEdge End _ _ _)) = False
@@ -102,7 +105,7 @@ xlStraightTrack = Piece Innie $ Edge Outie $ Straight (4.0)
 lgRoundedTrack :: Piece
 lgRoundedTrack = Piece Innie $ Edge Outie $ Arc (11.0 / 3.0) (pi * 2 / 8)
 
-inventory :: Inventory.Inventory Piece Int
+inventory :: Inventory Piece
 inventory = fromList
   [ (lgRoundedTrack, 8)
   , (smStraightTrack, 4)
@@ -111,5 +114,14 @@ inventory = fromList
 isClosed' :: [Piece] -> Bool
 isClosed' ps = isJust $ mfilter isClosed $ eitherToMaybe $ fold1M concatCircuits $ fromPiece <$> ps
 
+pickEachPermutation :: InventoryPicker Piece Piece
+pickEachPermutation = do
+  pieceMaybe <- pickEachMaybe
+  let pieces = maybe [] permutePiece pieceMaybe
+  lift pieces
+
+pickAll :: InventoryPicker Piece [Piece]
+pickAll = repeatedlyPickWithFilter matchingPieces pickEachPermutation
+
 main :: IO ()
-main = sequence_ $ fmap putStrLn $ fmap show $ (!! 42) $ filter isClosed' $ Inventory.permutations permutePiece inventory
+main = sequence_ $ fmap putStrLn $ fmap show $ (!! 42) $ filter isClosed' $ evalPicker pickAll inventory
