@@ -1,4 +1,4 @@
-module Main where
+module InventoryTest where
 
 import Test.HUnit
 import Inventory

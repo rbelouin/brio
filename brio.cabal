@@ -56,7 +56,7 @@ common warnings
     ghc-options: -Wall
 
 library brio-lib
-    exposed-modules:  Inventory
+    exposed-modules:  Inventory, Geometry
     hs-source-dirs:   lib
     build-depends:    base >=4.18,
                       containers >=0.6.7,
@@ -67,7 +67,8 @@ library brio-lib
 
 test-suite tests
     type: exitcode-stdio-1.0
-    main-is: InventoryTest.hs
+    main-is: AllTests.hs
+    other-modules: InventoryTest, GeometryTest
     build-depends:  base >=4.18,
                     containers >=0.6.7,
                     HUnit >=1.6.2.0,
