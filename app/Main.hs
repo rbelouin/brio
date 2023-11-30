@@ -7,6 +7,7 @@ import Data.Either.Extra (eitherToMaybe)
 import Data.List (nub)
 import Data.Maybe (isJust)
 import Inventory
+import Geometry
 
 data EdgeType = End | Innie | Outie deriving (Show, Eq, Ord)
 data EdgeShape = Straight { length :: Float }
@@ -25,9 +26,7 @@ data Piece = Piece
 
 data CircuitEdge = CircuitEdge
   { circuitEdgeType :: EdgeType
-  , circuitEdgeX :: Float
-  , circuitEdgeY :: Float
-  , circuitEdgeAngle :: Float
+  , circuitTransformation :: Transformation
   } deriving (Show, Eq)
 
 data Circuit = Circuit
@@ -36,45 +35,34 @@ data Circuit = Circuit
   } deriving (Show, Eq)
 
 fromEdge :: Edge -> CircuitEdge
-fromEdge (Edge t (Straight l)) = CircuitEdge t l 0 0
-fromEdge (Edge t (Arc r α)) = CircuitEdge t ((cos β) * r) ((1 + sin β) * r) α
+fromEdge (Edge t (Straight l)) = CircuitEdge t $ Transformation l 0 0
+fromEdge (Edge t (Arc r α)) = CircuitEdge t $ Transformation (cos β * r) ((1 + sin β) * r) α
   where β = α - pi / 2
 
 fromPiece :: Piece -> Circuit
 fromPiece (Piece b e) = Circuit b $ fromEdge e
 
-fromPolar :: Floating a => a -> a -> (a, a)
-fromPolar magnitude angle = (magnitude * cos angle, magnitude * sin angle)
-
-toPolar :: Floating a => a -> a -> (a, a)
-toPolar x y = (magnitude, angle)
-  where
-    magnitude = sqrt $ x*x + y*y
-    angle = acos $ x / magnitude
-
-rotate :: Floating a => a -> a -> a -> (a, a)
-rotate x y α = fromPolar m (α + β)
-  where (m, β) = toPolar x y
-
 concatCircuits :: Circuit -> Circuit -> Either String Circuit
-concatCircuits (Circuit _ (CircuitEdge End _ _ _)) _ = Left "Cannot add a piece to an ended circuit"
-concatCircuits (Circuit _ (CircuitEdge Innie _ _ _)) (Circuit Innie _) = Left "Cannot add an innie to an innie"
-concatCircuits (Circuit _ (CircuitEdge Outie _ _ _)) (Circuit Outie _) = Left "Cannot add an outie to an outie"
-concatCircuits (Circuit b (CircuitEdge _ x y α)) (Circuit _ (CircuitEdge t x' y' β)) = Right $ Circuit b $ CircuitEdge t (x + x'') (y + y'') (α + β)
-  where (x'', y'') = rotate x' y' α
+concatCircuits (Circuit _ (CircuitEdge End _ )) _ = Left "Cannot add a piece to an ended circuit"
+concatCircuits (Circuit _ (CircuitEdge Innie _)) (Circuit Innie _) = Left "Cannot add an innie to an innie"
+concatCircuits (Circuit _ (CircuitEdge Outie _)) (Circuit Outie _) = Left "Cannot add an outie to an outie"
+concatCircuits (Circuit b (CircuitEdge _ transformation)) (Circuit _ (CircuitEdge t transformation')) = Right $ Circuit b $ CircuitEdge t $ transformation <> transformation'
 
 matchingPieces :: Piece -> Piece -> Bool
 matchingPieces p p' = isRight $ concatCircuits (fromPiece p) (fromPiece p')
 
 isClosed :: Circuit -> Bool
 isClosed (Circuit End _) = False
-isClosed (Circuit _ (CircuitEdge End _ _ _)) = False
-isClosed (Circuit Innie (CircuitEdge Innie _ _ _)) = False
-isClosed (Circuit Outie (CircuitEdge Outie _ _ _)) = False
-isClosed (Circuit _ (CircuitEdge _ x y α)) = x < 0.1 && x > -0.1 && y < 0.1 && y > -0.1 && (β < 0.1 || β > 2*pi - 0.1)
+isClosed (Circuit _ (CircuitEdge End _)) = False
+isClosed (Circuit Innie (CircuitEdge Innie _)) = False
+isClosed (Circuit Outie (CircuitEdge Outie _)) = False
+isClosed (Circuit _ (CircuitEdge _ (Transformation x y α))) = x < 0.1 && x > -0.1 && y < 0.1 && y > -0.1 && (β < 0.1 || β > 2*pi - 0.1)
   where
     β = modPi α
-    modPi a = if a < 0 then modPi (a + 2*pi) else if (a >= 2*pi) then modPi (a - 2*pi) else a
+    modPi a
+      | a < 0 = modPi (a + 2*pi)
+      | a >= 2*pi = modPi (a - 2*pi)
+      | otherwise = a
 
 flipPiece :: Piece -> [Piece]
 flipPiece p@(Piece _ (Edge _ (Straight _))) = [p]
@@ -100,7 +88,7 @@ lgStraightTrack :: Piece
 lgStraightTrack = Piece Innie $ Edge Outie $ Straight (8.0 / 3.0)
 
 xlStraightTrack :: Piece
-xlStraightTrack = Piece Innie $ Edge Outie $ Straight (4.0)
+xlStraightTrack = Piece Innie $ Edge Outie $ Straight 4.0
 
 lgRoundedTrack :: Piece
 lgRoundedTrack = Piece Innie $ Edge Outie $ Arc (11.0 / 3.0) (pi * 2 / 8)
@@ -124,4 +112,4 @@ pickAll :: InventoryPicker Piece [Piece]
 pickAll = repeatedlyPickWithFilter matchingPieces pickEachPermutation
 
 main :: IO ()
-main = sequence_ $ fmap putStrLn $ fmap show $ (!! 42) $ filter isClosed' $ evalPicker pickAll inventory
+main = mapM_ print $ (!! 42) $ filter isClosed' $ evalPicker pickAll inventory
