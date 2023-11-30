@@ -3,8 +3,13 @@ module Piece where
 import Data.List (nub)
 import Geometry
 
-data EdgeType = End | Innie | Outie deriving (Show, Eq, Ord)
 data Direction = L | R deriving (Show, Eq, Ord)
+
+flipped :: Direction -> Direction
+flipped L = R
+flipped R = L
+
+data EdgeType = End | Innie | Outie deriving (Show, Eq, Ord)
 data EdgeShape = Straight { straightLength :: Float }
                | Arc { arcRadius :: Float, arcAngle :: Float, arcDirection :: Direction }
                deriving (Show, Eq, Ord)
@@ -15,33 +20,34 @@ data Edge = Edge
   } deriving (Show, Eq, Ord)
 
 data Piece = Piece
-  { pieceBase :: EdgeType
+  { pieceName :: String
+  , pieceBase :: EdgeType
   , edge :: Edge
   } deriving (Show, Eq, Ord)
 
 flipPiece :: Piece -> [Piece]
-flipPiece p@(Piece _ (Edge _ (Straight _))) = [p]
-flipPiece p@(Piece b (Edge t (Arc r α _))) =
-  [ Piece b (Edge t (Arc r α L))
-  , Piece b (Edge t (Arc r α R))
+flipPiece p@(Piece _ _ (Edge _ (Straight _))) = [p]
+flipPiece p@(Piece name b (Edge t (Arc r α d))) =
+  [ Piece name b (Edge t (Arc r α d))
+  , Piece (name ++ "#") b (Edge t (Arc r α $ flipped d))
   ]
 
 rotatePiece :: Piece -> [Piece]
-rotatePiece p@(Piece b (Edge t (Straight l))) = [p, Piece t (Edge b (Straight l))]
-rotatePiece p@(Piece b (Edge t (Arc r α d))) = [p, Piece t (Edge b (Arc r α (if d == L then R else L)))]
+rotatePiece p@(Piece name b (Edge t (Straight l))) = [p, Piece (name ++ "'") t (Edge b (Straight l))]
+rotatePiece p@(Piece name b (Edge t (Arc r α d))) = [p, Piece (name ++ "'") t (Edge b (Arc r α $ flipped d))]
 
 permutePiece :: Piece -> [Piece]
 permutePiece p = nub $ flipPiece p >>= rotatePiece
 
 matching :: Piece -> Piece -> Bool
-matching (Piece _ (Edge End _)) _ = False
-matching (Piece _ (Edge Innie _)) (Piece Innie _) = False
-matching (Piece _ (Edge Outie _)) (Piece Outie _) = False
+matching (Piece _ _ (Edge End _)) _ = False
+matching (Piece _ _ (Edge Innie _)) (Piece _ Innie _) = False
+matching (Piece _ _ (Edge Outie _)) (Piece _ Outie _) = False
 matching _ _ = True
 
 toTransformation :: Piece -> Transformation
-toTransformation (Piece _ (Edge e (Straight l))) = Transformation (l * 20) 0 0
-toTransformation (Piece _ (Edge e (Arc r α d))) = Transformation x y β
+toTransformation (Piece _ _ (Edge e (Straight l))) = Transformation (l * 20) 0 0
+toTransformation (Piece _ _ (Edge e (Arc r α d))) = Transformation x y β
   where
     x = sin α * r * 20
     y = (if d == R then 1 else -1) * (1 - cos α) * r * 20
