@@ -45,12 +45,12 @@ matching (Piece _ _ (Edge Innie _)) (Piece _ Innie _) = False
 matching (Piece _ _ (Edge Outie _)) (Piece _ Outie _) = False
 matching _ _ = True
 
-toTransformation :: Piece -> Transformation
-toTransformation (Piece _ _ (Edge e (Straight l))) = Transformation (l * 20) 0 0
-toTransformation (Piece _ _ (Edge e (Arc r α d))) = Transformation x y β
+toTransformation :: EdgeShape -> Transformation
+toTransformation (Straight l) = Transformation l 0 0
+toTransformation (Arc r α d) = Transformation x y β
   where
-    x = sin α * r * 20
-    y = (if d == R then 1 else -1) * (1 - cos α) * r * 20
+    x = sin α * r
+    y = (if d == R then 1 else -1) * (1 - cos α) * r
     β = if d == R then α else -α
 
 isClosedCombination :: [Piece] -> Bool
@@ -58,7 +58,7 @@ isClosedCombination [] = False
 isClosedCombination [firstPiece] = False
 isClosedCombination pieces@(firstPiece:otherPieces) = matching (last otherPieces) firstPiece && almostEmptyTransformation
   where
-    (Transformation x y α) = foldMap toTransformation pieces
+    (Transformation x y α) = foldMap (toTransformation . edgeShape . edge) pieces
     -- Let’s have some little tolerance:
     -- 1. Operations on floats can lead to an accumulation of small errors
     -- 2. The BRIO tracks themselves allow for some little flexibility

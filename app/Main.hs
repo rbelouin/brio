@@ -2,6 +2,7 @@ module Main where
 
 import Inventory
 import Piece
+import Svg
 
 -- Source: https://woodenrailway.info/track/brio-track-guide
 data PieceIdentifier =
@@ -46,4 +47,7 @@ pickAll :: InventoryPicker Piece [Piece]
 pickAll = repeatedlyPickWithFilter matching pickEachPermutation
 
 main :: IO ()
-main = print $ fmap pieceName $ (!! 59) $ filter isClosedCombination $ evalPicker pickAll inventory
+main = sequence_ $ zipWith writeFile filepaths solutions
+  where
+    filepaths = fmap (\i -> "./dist/output-" ++ show i ++ ".svg") [0..]
+    solutions = fmap renderSvg $ filter isClosedCombination $ evalPicker pickAll inventory
