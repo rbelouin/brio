@@ -5,26 +5,44 @@ import Data.Bifunctor (first)
 import Geometry
 import Piece
 
+data ViewBox = ViewBox Float Float Float Float
+data SvgRenderState = SvgRenderState Position ViewBox
+
+emptyRenderState :: SvgRenderState
+emptyRenderState = SvgRenderState (Position 0 0 0) $ ViewBox 0 0 0 0
+
+fromPosition :: Position -> SvgRenderState
+fromPosition pos = updateWithPosition pos emptyRenderState
+
+updateWithPosition :: Position -> SvgRenderState -> SvgRenderState
+updateWithPosition pos@(Position x y _) state@(SvgRenderState _ (ViewBox x' y' x'' y'')) =
+  SvgRenderState pos $ ViewBox (min x x') (min y y') (max x x'') (max y y'')
+
 class SvgElement a where
-  toElement :: a -> Position -> (String, Position)
+  toElement :: a -> SvgRenderState -> (String, SvgRenderState)
 
-svgString :: SvgElement a => a -> Position -> String
-svgString elem pos = fst $ toElement elem pos
+svgString :: SvgElement a => a -> SvgRenderState -> String
+svgString elem state = fst $ toElement elem state
 
-nextPosition :: SvgElement a => a -> Position -> Position
-nextPosition elem pos = snd $ toElement elem pos
+nextState :: SvgElement a => a -> SvgRenderState -> SvgRenderState
+nextState elem state = snd $ toElement elem state
 
 renderSvg :: SvgElement a => a -> String
 renderSvg elem = mconcat
-  -- TODO: stop hardcoding the size of the viewBox
-  [ "<svg xmlns=\"http://www.w3.org/2000/svg\" xmlns:xlink=\"http://www.w3.org/1999/xlink\" viewBox=\"-1000 -1000 2000 2000\" height=\"1000\" width=\"1000\" version=\"1.11.1\">"
-  , svgString elem $ Position 0 0 0
+  [ "<svg xmlns=\"http://www.w3.org/2000/svg\" xmlns:xlink=\"http://www.w3.org/1999/xlink\" viewBox=\"" ++ viewBox ++ "\" height=\"" ++ h ++ "\" width=\"" ++ w ++ "\" version=\"1.11.1\">"
+  , content
   , "</svg>"
   ]
+    where
+      (content, SvgRenderState _ (ViewBox x y x' y')) = toElement elem emptyRenderState
+      viewBox = show (x - 10) ++ " " ++ show (y - 10) ++ " " ++ w ++ " " ++ h
+      w = show $ x' - x + 20
+      h = show $ y' - y + 20
+
 
 instance SvgElement EdgeType where
-  toElement End pos@(Position x y α) =
-    ("<line x1=\"" ++ x1 ++ "\" y1=\"" ++ y1 ++ "\" x2=\"" ++ x2 ++ "\" y2=\"" ++ y2 ++ "\" />", pos)
+  toElement End state@(SvgRenderState pos@(Position x y α) _) =
+    ("<line x1=\"" ++ x1 ++ "\" y1=\"" ++ y1 ++ "\" x2=\"" ++ x2 ++ "\" y2=\"" ++ y2 ++ "\" />", updateWithPosition pos state)
     where
       x1 = show $ x - δx
       y1 = show $ y + δy
@@ -33,8 +51,8 @@ instance SvgElement EdgeType where
       δx = 10 * cos β
       δy = 10 * sin β
       β = (pi / 2) - α
-  toElement _ pos@(Position x y α) =
-    ("<path d=\"M" ++ p1 ++ " L" ++ p ++ " L" ++ p2 ++ " \"/>", pos)
+  toElement _ state@(SvgRenderState pos@(Position x y α) _) =
+    ("<path d=\"M" ++ p1 ++ " L" ++ p ++ " L" ++ p2 ++ " \"/>", updateWithPosition pos state)
     where
       p = show x ++ "," ++ show y
       p1 = x1 ++ "," ++ y1
@@ -46,8 +64,8 @@ instance SvgElement EdgeType where
       β = (3 * pi / 4) - α
 
 instance SvgElement EdgeShape where
-  toElement shape@(Straight l) pos@(Position x y α) =
-    ("<line x1=\"" ++ x1 ++ "\" y1=\"" ++ y1 ++ "\" x2=\"" ++ x2 ++ "\" y2=\"" ++ y2 ++ "\" />", pos')
+  toElement shape@(Straight l) state@(SvgRenderState pos@(Position x y α) _) =
+    ("<line x1=\"" ++ x1 ++ "\" y1=\"" ++ y1 ++ "\" x2=\"" ++ x2 ++ "\" y2=\"" ++ y2 ++ "\" />", updateWithPosition pos' state)
     where
       x1 = show x
       y1 = show y
@@ -55,8 +73,8 @@ instance SvgElement EdgeShape where
       x2 = show x'
       y2 = show y'
 
-  toElement shape@(Arc r β d) pos@(Position x y α) =
-    ("<path d=\"M" ++ p1 ++ " A" ++ radiuses ++ " 0.0000 0 " ++ sweepFlag ++ " " ++ p2 ++ " \"/>", pos')
+  toElement shape@(Arc r β d) state@(SvgRenderState pos@(Position x y α) _) =
+    ("<path d=\"M" ++ p1 ++ " A" ++ radiuses ++ " 0.0000 0 " ++ sweepFlag ++ " " ++ p2 ++ " \"/>", updateWithPosition pos' state)
     where
       p1 = show x ++ "," ++ show y
       p2 = show x' ++ "," ++ show y'
@@ -65,14 +83,14 @@ instance SvgElement EdgeShape where
       pos'@(Position x' y' _) = transform (toTransformation shape) pos
 
 instance SvgElement Piece where
-  toElement (Piece _ b (Edge t s)) pos =
-    ("<g>" ++ svgString b pos ++ shapeSvg ++ svgString t shapePosition ++ "</g>", shapePosition)
-    where (shapeSvg, shapePosition) = toElement s pos
+  toElement (Piece _ b (Edge t s)) state =
+    ("<g>" ++ svgString b state ++ shapeSvg ++ svgString t shapeState ++ "</g>", shapeState)
+    where (shapeSvg, shapeState) = toElement s state
 
 instance (SvgElement a) => SvgElement [a] where
-  toElement pieces pos =
-    ("<g stroke=\"black\" stroke-width=\"3\" fill=\"transparent\">" ++ piecesSvg ++ "</g>", piecesPosition)
+  toElement pieces s =
+    ("<g stroke=\"black\" stroke-width=\"3\" fill=\"transparent\">" ++ piecesSvg ++ "</g>", piecesState)
     where
-      (piecesSvg, piecesPosition) = first mconcat $ runState elementState pos
-      elementState :: State Position [String]
+      (piecesSvg, piecesState) = first mconcat $ runState elementState s
+      elementState :: State SvgRenderState [String]
       elementState = mapM (state . toElement) pieces
